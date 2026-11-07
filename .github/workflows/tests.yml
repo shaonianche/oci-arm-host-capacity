@@ -40,23 +40,27 @@ jobs:
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction
-      - name: Run script
+
+      - name: Fetch OCI private key
+        env:
+          OCI_PRIVATE_KEY_SOURCE: ${{ secrets.OCI_PRIVATE_KEY_FILENAME }}
         run: |
-          php index.php
+          key_file="$RUNNER_TEMP/oci_api_key.pem"
+          if [[ "$OCI_PRIVATE_KEY_SOURCE" =~ ^https?:// ]]; then
+            code=$(curl -sSL --max-time 30 -o "$key_file" -w '%{http_code}' "$OCI_PRIVATE_KEY_SOURCE" || true)
+            echo "Private key URL returned HTTP $code"
+            [[ "$code" == "200" ]] || exit 1
+          else
+            cp "$OCI_PRIVATE_KEY_SOURCE" "$key_file"
+          fi
+          chmod 600 "$key_file"
+          echo "OCI_PRIVATE_KEY_FILENAME=$key_file" >> "$GITHUB_ENV"
+
+      - name: Verify OCI credentials
+        run: php verify.php
         env:
           OCI_REGION: ${{ secrets.OCI_REGION }}
           OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
           OCI_TENANCY_ID: ${{ secrets.OCI_TENANCY_ID }}
           OCI_KEY_FINGERPRINT: ${{ secrets.OCI_KEY_FINGERPRINT }}
-          OCI_PRIVATE_KEY_FILENAME: ${{ secrets.OCI_PRIVATE_KEY_FILENAME }}
           OCI_AVAILABILITY_DOMAIN: ${{ secrets.OCI_AVAILABILITY_DOMAIN }}
-          OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
-          OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
-          OCI_OCPUS: ${{ secrets.OCI_OCPUS }}
-          OCI_MEMORY_IN_GBS: ${{ secrets.OCI_MEMORY_IN_GBS }}
-          OCI_SHAPE: ${{ secrets.OCI_SHAPE }}
-          OCI_MAX_INSTANCES: ${{ secrets.OCI_MAX_INSTANCES }}
-          OCI_SSH_PUBLIC_KEY: ${{ secrets.OCI_SSH_PUBLIC_KEY }}
-          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
-          TELEGRAM_BOT_API_KEY: ${{ secrets.TELEGRAM_BOT_API_KEY }}
-          OCI_BOOT_VOLUME_SIZE_IN_GBS: ${{ secrets.OCI_BOOT_VOLUME_SIZE_IN_GBS }}
